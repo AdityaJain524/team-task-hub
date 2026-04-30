@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Plus, Trash2, UserPlus, Calendar } from "lucide-react";
+import CreateTaskDialog from "@/components/CreateTaskDialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
