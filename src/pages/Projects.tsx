@@ -42,7 +42,7 @@ export default function Projects() {
     const fd = new FormData(e.currentTarget);
     const parsed = projectSchema.safeParse({ name: fd.get("name"), description: fd.get("description") || undefined });
     if (!parsed.success) { toast.error(parsed.error.errors[0].message); return; }
-    createMut.mutate(parsed.data);
+    createMut.mutate({ name: parsed.data.name, description: parsed.data.description });
   };
 
   return (
