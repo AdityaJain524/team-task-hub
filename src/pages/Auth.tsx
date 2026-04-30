@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { authApi } from "@/lib/api";
+import { authApi, AppRole } from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { CheckSquare } from "lucide-react";
+import { CheckSquare, Shield, Users } from "lucide-react";
 
 const signupSchema = z.object({
   fullName: z.string().trim().min(2, "Name must be at least 2 characters").max(80),
@@ -20,9 +21,29 @@ const loginSchema = z.object({
   password: z.string().min(1, "Password is required").max(72),
 });
 
+type Portal = "admin" | "member";
+
 export default function Auth() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [portal, setPortal] = useState<Portal>("member");
+
+  const portalMeta = {
+    admin: {
+      label: "Admin",
+      icon: Shield,
+      tagline: "Manage projects, teams, and tasks.",
+      role: "admin" as AppRole,
+      accent: "from-primary to-primary-glow",
+    },
+    member: {
+      label: "Team Member",
+      icon: Users,
+      tagline: "View and update your assigned tasks.",
+      role: "member" as AppRole,
+      accent: "from-accent to-warning",
+    },
+  }[portal];
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -48,26 +69,67 @@ export default function Auth() {
     if (!parsed.success) { toast.error(parsed.error.errors[0].message); return; }
     setLoading(true);
     try {
-      await authApi.login(parsed.data.email, parsed.data.password);
-      toast.success("Welcome back");
+      const { user } = await authApi.login(parsed.data.email, parsed.data.password);
+      if (!user) throw new Error("Login failed");
+
+      // Enforce portal/role match
+      const role = await authApi.getRole(user.id);
+      if (role !== portalMeta.role) {
+        await supabase.auth.signOut();
+        toast.error(
+          `This account is registered as ${role ?? "unknown"}. Please use the ${role === "admin" ? "Admin" : "Team Member"} portal.`
+        );
+        return;
+      }
+      toast.success(`Welcome back, ${portalMeta.label}`);
       navigate("/");
     } catch (err: any) {
       toast.error(err.message ?? "Login failed");
     } finally { setLoading(false); }
   };
 
+  const Icon = portalMeta.icon;
+
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-background to-secondary">
       <div className="w-full max-w-md">
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center shadow-elegant mb-4">
-            <CheckSquare className="w-7 h-7 text-primary-foreground" />
+        <div className="flex flex-col items-center mb-6">
+          <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${portalMeta.accent} flex items-center justify-center shadow-elegant mb-4 transition-all`}>
+            <Icon className="w-7 h-7 text-primary-foreground" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Team Task Manager</h1>
-          <p className="text-muted-foreground text-sm mt-1">Plan, assign, and ship together.</p>
+          <p className="text-muted-foreground text-sm mt-1">{portalMeta.tagline}</p>
+        </div>
+
+        {/* Portal selector */}
+        <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-secondary mb-4">
+          {(["admin", "member"] as Portal[]).map((p) => {
+            const isActive = portal === p;
+            const PIcon = p === "admin" ? Shield : Users;
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPortal(p)}
+                className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  isActive ? "bg-card shadow-card text-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <PIcon className="w-4 h-4" />
+                {p === "admin" ? "Admin" : "Team Member"}
+              </button>
+            );
+          })}
         </div>
 
         <Card className="p-6 shadow-card">
+          <div className="mb-4 flex items-center gap-2">
+            <CheckSquare className="w-4 h-4 text-primary" />
+            <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+              {portalMeta.label} Portal
+            </p>
+          </div>
+
           <Tabs defaultValue="login">
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="login">Login</TabsTrigger>
@@ -85,8 +147,13 @@ export default function Auth() {
                   <Input id="login-password" name="password" type="password" required autoComplete="current-password" />
                 </div>
                 <Button type="submit" disabled={loading} className="w-full">
-                  {loading ? "Signing in..." : "Sign in"}
+                  {loading ? "Signing in..." : `Sign in as ${portalMeta.label}`}
                 </Button>
+                {portal === "admin" && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    Admin access is restricted to authorized accounts.
+                  </p>
+                )}
               </form>
             </TabsContent>
 
@@ -108,7 +175,7 @@ export default function Auth() {
                   {loading ? "Creating..." : "Create account"}
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
-                  The first user to sign up becomes the Admin.
+                  New accounts are created as <strong>Team Members</strong>. The first ever account becomes the Admin. Additional admins can be granted by an existing Admin.
                 </p>
               </form>
             </TabsContent>
