@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Clock, ListTodo, AlertTriangle, FolderKanban } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
+import CreateTaskDialog from "@/components/CreateTaskDialog";
 
 export default function Dashboard() {
   const { user, isAdmin } = useAuth();
@@ -35,11 +36,14 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">
-          {isAdmin ? "Overview of all team activity." : "Your assigned tasks at a glance."}
-        </p>
+      <header className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground mt-1">
+            {isAdmin ? "Overview of all team activity." : "Your assigned tasks at a glance."}
+          </p>
+        </div>
+        {isAdmin && <CreateTaskDialog />}
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
