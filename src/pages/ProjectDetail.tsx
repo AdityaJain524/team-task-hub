@@ -103,45 +103,7 @@ export default function ProjectDetail() {
         <TabsContent value="tasks" className="space-y-4 mt-6">
           {isAdmin && (
             <div className="flex justify-end">
-              <Dialog open={taskOpen} onOpenChange={setTaskOpen}>
-                <DialogTrigger asChild>
-                  <Button><Plus className="w-4 h-4 mr-2" /> New task</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader><DialogTitle>Create task</DialogTitle></DialogHeader>
-                  <form onSubmit={onCreateTask} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="title">Title</Label>
-                      <Input id="title" name="title" required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="description">Description</Label>
-                      <Textarea id="description" name="description" rows={3} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="deadline">Deadline</Label>
-                        <Input id="deadline" name="deadline" type="datetime-local" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="assigned_to">Assignee</Label>
-                        <select name="assigned_to" id="assigned_to"
-                          className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm">
-                          <option value="">Unassigned</option>
-                          {members.map((m: any) => (
-                            <option key={m.user_id} value={m.user_id}>
-                              {m.profiles?.full_name || m.profiles?.email}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <Button type="submit" className="w-full" disabled={createTask.isPending}>
-                      {createTask.isPending ? "Creating..." : "Create task"}
-                    </Button>
-                  </form>
-                </DialogContent>
-              </Dialog>
+              <CreateTaskDialog defaultProjectId={id} lockProject />
             </div>
           )}
 
