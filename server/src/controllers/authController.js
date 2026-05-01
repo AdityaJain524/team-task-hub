@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const { z } = require('zod');
 const userModel = require('../models/userModel');
+const { signToken, verifyToken } = require('../middleware/auth');
 
 const signupSchema = z.object({
   email: z.string().email(),
@@ -14,15 +14,11 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-function signToken(user) {
-  return jwt.sign(
-    { sub: user.id, role: user.role, email: user.email },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-  );
-}
+const verifySchema = z.object({
+  token: z.string().min(10),
+});
 
-exports.schemas = { signupSchema, loginSchema };
+exports.schemas = { signupSchema, loginSchema, verifySchema };
 
 exports.signup = async (req, res) => {
   const { email, password, fullName } = req.body;
@@ -52,5 +48,29 @@ exports.login = async (req, res) => {
 };
 
 exports.me = async (req, res) => {
-  res.json({ user: req.user });
+  res.json({ user: req.user, tokenPayload: req.tokenPayload });
+};
+
+/**
+ * POST /api/auth/verify  { token }
+ * Stateless JWT verification. Returns { valid, payload, user } or { valid:false, error }.
+ * Does NOT require Authorization header — useful for the frontend to validate a stored token.
+ */
+exports.verify = async (req, res) => {
+  const { token } = req.body;
+  try {
+    const payload = verifyToken(token);
+    const user = await userModel.findById(payload.sub);
+    if (!user) return res.status(401).json({ valid: false, error: 'User no longer exists' });
+    if (payload.role !== user.role) {
+      return res.status(401).json({ valid: false, error: 'Role mismatch' });
+    }
+    return res.json({ valid: true, payload, user });
+  } catch (err) {
+    const reason =
+      err.name === 'TokenExpiredError' ? 'Token expired' :
+      err.name === 'JsonWebTokenError' ? 'Invalid token' :
+      'Token verification failed';
+    return res.status(401).json({ valid: false, error: reason });
+  }
 };
