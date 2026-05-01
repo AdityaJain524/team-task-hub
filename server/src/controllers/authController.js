@@ -48,5 +48,29 @@ exports.login = async (req, res) => {
 };
 
 exports.me = async (req, res) => {
-  res.json({ user: req.user });
+  res.json({ user: req.user, tokenPayload: req.tokenPayload });
+};
+
+/**
+ * POST /api/auth/verify  { token }
+ * Stateless JWT verification. Returns { valid, payload, user } or { valid:false, error }.
+ * Does NOT require Authorization header — useful for the frontend to validate a stored token.
+ */
+exports.verify = async (req, res) => {
+  const { token } = req.body;
+  try {
+    const payload = verifyToken(token);
+    const user = await userModel.findById(payload.sub);
+    if (!user) return res.status(401).json({ valid: false, error: 'User no longer exists' });
+    if (payload.role !== user.role) {
+      return res.status(401).json({ valid: false, error: 'Role mismatch' });
+    }
+    return res.json({ valid: true, payload, user });
+  } catch (err) {
+    const reason =
+      err.name === 'TokenExpiredError' ? 'Token expired' :
+      err.name === 'JsonWebTokenError' ? 'Invalid token' :
+      'Token verification failed';
+    return res.status(401).json({ valid: false, error: reason });
+  }
 };
