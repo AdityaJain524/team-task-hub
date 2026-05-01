@@ -10,7 +10,8 @@ DROP TYPE IF EXISTS task_status;
 DROP TYPE IF EXISTS app_role;
 
 CREATE TYPE app_role    AS ENUM ('admin', 'member');
-CREATE TYPE task_status AS ENUM ('pending', 'in_progress', 'completed');
+CREATE TYPE task_status AS ENUM ('todo', 'in_progress', 'done');
+CREATE TYPE task_priority AS ENUM ('low', 'medium', 'high');
 
 CREATE TABLE users (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -42,7 +43,8 @@ CREATE TABLE tasks (
   project_id  UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   title       TEXT NOT NULL,
   description TEXT,
-  status      task_status NOT NULL DEFAULT 'pending',
+  status      task_status NOT NULL DEFAULT 'todo',
+  priority    task_priority NOT NULL DEFAULT 'medium',
   deadline    TIMESTAMPTZ,
   assigned_to UUID REFERENCES users(id) ON DELETE SET NULL,
   created_by  UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,

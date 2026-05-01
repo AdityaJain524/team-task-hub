@@ -37,6 +37,14 @@ exports.create = async (req, res) => {
     description: req.body.description ?? null,
     createdBy: req.user.id,
   });
+
+  // Requirement: "Create projects (creator becomes Admin)"
+  if (req.user.role !== 'admin') {
+    await userModel.updateRole(req.user.id, 'admin');
+    // Note: The req.user object in this request still has the old role, 
+    // but subsequent requests will have the new role from DB/Token.
+  }
+
   res.status(201).json({ project });
 };
 

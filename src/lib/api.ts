@@ -1,131 +1,204 @@
-// REST-style API layer wrapping Supabase. Keeps controllers/routes/models cleanly separated.
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
-export type TaskStatus = Database["public"]["Enums"]["task_status"];
-export type AppRole = Database["public"]["Enums"]["app_role"];
-export type Project = Database["public"]["Tables"]["projects"]["Row"];
-export type Task = Database["public"]["Tables"]["tasks"]["Row"];
-export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+async function fetcher(endpoint: string, options: RequestInit = {}) {
+  const token = localStorage.getItem('token');
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    ...options.headers,
+  };
+
+  const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+  
+  if (response.status === 204) return null;
+  
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || 'Something went wrong');
+  }
+  return data;
+}
+
+export type TaskStatus = 'todo' | 'in_progress' | 'done';
+export type TaskPriority = 'low' | 'medium' | 'high';
+export type AppRole = 'admin' | 'member';
+
+export interface User {
+  id: string;
+  email: string;
+  full_name: string;
+  role: AppRole;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface Task {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  deadline: string | null;
+  assigned_to: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  assignee_name?: string;
+  assignee_email?: string;
+  project_name?: string;
+}
+
+export interface DashboardStats {
+  total: number;
+  todo: number;
+  in_progress: number;
+  done: number;
+  overdue: number;
+  tasksPerUser?: { full_name: string; count: number }[];
+}
 
 // ===== AUTH =====
 export const authApi = {
   signup: async (email: string, password: string, fullName: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email, password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-        data: { full_name: fullName },
-      },
+    const data = await fetcher('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, fullName }),
     });
-    if (error) throw error;
+    localStorage.setItem('token', data.token);
     return data;
   },
   login: async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    const data = await fetcher('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    localStorage.setItem('token', data.token);
     return data;
   },
   logout: async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    localStorage.removeItem('token');
   },
-  getRole: async (userId: string): Promise<AppRole | null> => {
-    const { data, error } = await supabase
-      .from("user_roles").select("role").eq("user_id", userId).maybeSingle();
-    if (error) throw error;
-    return data?.role ?? null;
+  me: async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    try {
+      const data = await fetcher('/auth/verify', {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+      });
+      return data.user as User;
+    } catch (e) {
+      localStorage.removeItem('token');
+      return null;
+    }
   },
 };
 
 // ===== PROJECTS =====
 export const projectsApi = {
   list: async () => {
-    const { data, error } = await supabase
-      .from("projects").select("*").order("created_at", { ascending: false });
-    if (error) throw error;
-    return data;
+    const data = await fetcher('/projects');
+    return data.projects as Project[];
   },
   get: async (id: string) => {
-    const { data, error } = await supabase.from("projects").select("*").eq("id", id).single();
-    if (error) throw error;
-    return data;
+    const data = await fetcher(`/projects/${id}`);
+    return data.project as Project;
   },
   create: async (input: { name: string; description?: string }) => {
-    const { data: u } = await supabase.auth.getUser();
-    if (!u.user) throw new Error("Not authenticated");
-    const { data, error } = await supabase
-      .from("projects")
-      .insert({ ...input, created_by: u.user.id })
-      .select().single();
-    if (error) throw error;
-    return data;
+    const data = await fetcher('/projects', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    return data.project as Project;
   },
   remove: async (id: string) => {
-    const { error } = await supabase.from("projects").delete().eq("id", id);
-    if (error) throw error;
+    await fetcher(`/projects/${id}`, { method: 'DELETE' });
   },
 };
 
 // ===== MEMBERS =====
 export const membersApi = {
   listForProject: async (projectId: string) => {
-    const { data, error } = await supabase
-      .from("project_members")
-      .select("id, user_id, added_at, profiles:user_id(id, email, full_name)")
-      .eq("project_id", projectId);
-    if (error) throw error;
-    return data;
+    const data = await fetcher(`/projects/${projectId}/members`);
+    return data.members;
   },
   add: async (projectId: string, userId: string) => {
-    const { error } = await supabase
-      .from("project_members").insert({ project_id: projectId, user_id: userId });
-    if (error) throw error;
+    await fetcher(`/projects/${projectId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
   },
-  remove: async (memberId: string) => {
-    const { error } = await supabase.from("project_members").delete().eq("id", memberId);
-    if (error) throw error;
+  remove: async (projectId: string, userId: string) => {
+    await fetcher(`/projects/${projectId}/members/${userId}`, {
+      method: 'DELETE',
+    });
   },
   allProfiles: async () => {
-    const { data, error } = await supabase
-      .from("profiles").select("id, email, full_name").order("full_name");
-    if (error) throw error;
-    return data;
+    const data = await fetcher('/users');
+    return data.users;
+  },
+  create: async (input: { email: string; password: string; fullName: string; role: AppRole }) => {
+    const data = await fetcher('/users', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    return data.user as User;
+  },
+  updateRole: async (userId: string, role: AppRole) => {
+    const data = await fetcher(`/users/${userId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    });
+    return data.user as User;
   },
 };
 
 // ===== TASKS =====
 export const tasksApi = {
-  list: async (filters?: { projectId?: string; assignedTo?: string }) => {
-    let q = supabase
-      .from("tasks")
-      .select("*, projects:project_id(name), assignee:assigned_to(id, full_name, email)")
-      .order("created_at", { ascending: false });
-    if (filters?.projectId) q = q.eq("project_id", filters.projectId);
-    if (filters?.assignedTo) q = q.eq("assigned_to", filters.assignedTo);
-    const { data, error } = await q;
-    if (error) throw error;
-    return data;
+  listForProject: async (projectId: string) => {
+    const data = await fetcher(`/tasks/project/${projectId}`);
+    return data.tasks as Task[];
+  },
+  listMine: async () => {
+    const data = await fetcher('/tasks/mine');
+    return data.tasks as Task[];
   },
   create: async (input: {
-    project_id: string; title: string; description?: string;
-    deadline?: string | null; assigned_to?: string | null;
+    projectId: string; title: string; description?: string | null;
+    deadline?: string | null; assignedTo?: string | null;
   }) => {
-    const { data: u } = await supabase.auth.getUser();
-    if (!u.user) throw new Error("Not authenticated");
-    const { data, error } = await supabase
-      .from("tasks")
-      .insert({ ...input, created_by: u.user.id })
-      .select().single();
-    if (error) throw error;
-    return data;
+    const data = await fetcher('/tasks', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    return data.task as Task;
+  },
+  update: async (id: string, input: Partial<Task>) => {
+    const data = await fetcher(`/tasks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
+    return data.task as Task;
   },
   updateStatus: async (id: string, status: TaskStatus) => {
-    const { error } = await supabase.from("tasks").update({ status }).eq("id", id);
-    if (error) throw error;
+    const data = await fetcher(`/tasks/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    return data.task as Task;
   },
   remove: async (id: string) => {
-    const { error } = await supabase.from("tasks").delete().eq("id", id);
-    if (error) throw error;
+    await fetcher(`/tasks/${id}`, { method: 'DELETE' });
   },
+  getDashboardStats: async () => {
+    const data = await fetcher('/tasks/dashboard');
+    return data.stats as DashboardStats;
+  }
 };

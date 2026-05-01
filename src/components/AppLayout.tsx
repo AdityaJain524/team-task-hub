@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { authApi } from "@/lib/api";
-import { CheckSquare, LayoutDashboard, FolderKanban, LogOut } from "lucide-react";
+import { CheckSquare, LayoutDashboard, FolderKanban, LogOut, Users } from "lucide-react";
 import { toast } from "sonner";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
@@ -37,6 +37,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <NavLink to="/projects" className={navCls}>
             <FolderKanban className="w-4 h-4" /> Projects
           </NavLink>
+          {isAdmin && (
+            <NavLink to="/users" className={navCls}>
+              <Users className="w-4 h-4" /> Team
+            </NavLink>
+          )}
         </nav>
         <div className="p-3 border-t space-y-3">
           <div className="px-2">

@@ -8,6 +8,7 @@ const createSchema = z.object({
   description: z.string().max(4000).optional().nullable(),
   deadline: z.string().datetime().optional().nullable(),
   assignedTo: z.string().uuid().optional().nullable(),
+  priority: z.enum(['low', 'medium', 'high']).optional(),
 });
 
 const updateSchema = z.object({
@@ -15,16 +16,22 @@ const updateSchema = z.object({
   description: z.string().max(4000).optional().nullable(),
   deadline: z.string().datetime().optional().nullable(),
   assignedTo: z.string().uuid().optional().nullable(),
-  status: z.enum(['pending', 'in_progress', 'completed']),
+  status: z.enum(['todo', 'in_progress', 'done']),
+  priority: z.enum(['low', 'medium', 'high']),
 });
 
 const statusSchema = z.object({
-  status: z.enum(['pending', 'in_progress', 'completed']),
+  status: z.enum(['todo', 'in_progress', 'done']),
 });
 
 exports.schemas = { createSchema, updateSchema, statusSchema };
 
 exports.listByProject = async (req, res) => {
+  if (req.params.projectId === 'all') {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+    const tasks = await taskModel.listAll();
+    return res.json({ tasks });
+  }
   const project = await projectModel.findById(req.params.projectId);
   if (!project) return res.status(404).json({ error: 'Project not found' });
   if (req.user.role !== 'admin') {
@@ -47,6 +54,7 @@ exports.create = async (req, res) => {
     description: req.body.description ?? null,
     deadline: req.body.deadline ?? null,
     assignedTo: req.body.assignedTo ?? null,
+    priority: req.body.priority ?? 'medium',
     createdBy: req.user.id,
   });
   res.status(201).json({ task });

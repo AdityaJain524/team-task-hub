@@ -3,39 +3,45 @@ import { tasksApi, projectsApi } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Clock, ListTodo, AlertTriangle, FolderKanban } from "lucide-react";
+import { CheckCircle2, Clock, ListTodo, AlertTriangle, FolderKanban, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import CreateTaskDialog from "@/components/CreateTaskDialog";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 export default function Dashboard() {
   const { user, isAdmin } = useAuth();
 
   const { data: tasks = [] } = useQuery({
     queryKey: ["tasks", isAdmin ? "all" : user?.id],
-    queryFn: () => tasksApi.list(isAdmin ? undefined : { assignedTo: user!.id }),
+    queryFn: () => isAdmin ? tasksApi.listForProject("all") : tasksApi.listMine(),
     enabled: !!user,
   });
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"], queryFn: projectsApi.list, enabled: !!user,
   });
+  const { data: apiStats } = useQuery({
+    queryKey: ["dashboardStats"],
+    queryFn: tasksApi.getDashboardStats,
+    enabled: !!user && isAdmin,
+  });
 
   const now = new Date();
   const total = tasks.length;
-  const pending = tasks.filter(t => t.status === "pending").length;
+  const todo = tasks.filter(t => t.status === "todo").length;
   const inProgress = tasks.filter(t => t.status === "in_progress").length;
-  const completed = tasks.filter(t => t.status === "completed").length;
-  const overdue = tasks.filter(t => t.deadline && new Date(t.deadline) < now && t.status !== "completed");
+  const done = tasks.filter(t => t.status === "done").length;
+  const overdue = tasks.filter(t => t.deadline && new Date(t.deadline) < now && t.status !== "done");
 
   const stats = [
     { label: "Total tasks", value: total, icon: ListTodo, tone: "text-primary" },
     { label: "In progress", value: inProgress, icon: Clock, tone: "text-warning" },
-    { label: "Completed", value: completed, icon: CheckCircle2, tone: "text-success" },
+    { label: "Completed", value: done, icon: CheckCircle2, tone: "text-success" },
     { label: "Overdue", value: overdue.length, icon: AlertTriangle, tone: "text-destructive" },
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-10">
       <header className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
@@ -73,7 +79,7 @@ export default function Dashboard() {
                   <div>
                     <p className="font-medium text-sm">{t.title}</p>
                     <p className="text-xs text-muted-foreground">
-                      {t.projects?.name} · due {format(new Date(t.deadline), "MMM d, yyyy")}
+                      {t.project_name} · due {format(new Date(t.deadline), "MMM d, yyyy")}
                     </p>
                   </div>
                   <Badge variant="outline" className="capitalize">{t.status.replace("_", " ")}</Badge>
@@ -88,12 +94,37 @@ export default function Dashboard() {
             <h2 className="font-semibold">Status breakdown</h2>
           </div>
           <div className="space-y-3">
-            <StatusRow label="Pending" value={pending} total={total} className="bg-muted-foreground/40" />
+            <StatusRow label="To Do" value={todo} total={total} className="bg-muted-foreground/40" />
             <StatusRow label="In progress" value={inProgress} total={total} className="bg-warning" />
-            <StatusRow label="Completed" value={completed} total={total} className="bg-success" />
+            <StatusRow label="Done" value={done} total={total} className="bg-success" />
           </div>
         </Card>
       </div>
+
+      {isAdmin && apiStats?.tasksPerUser && (
+        <Card className="p-6 shadow-card">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="font-semibold flex items-center gap-2"><Users className="w-4 h-4" /> Tasks per user</h2>
+          </div>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={apiStats.tasksPerUser}>
+                <XAxis dataKey="full_name" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip 
+                  cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                />
+                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]}>
+                  {apiStats.tasksPerUser.map((_entry, index) => (
+                    <Cell key={`cell-${index}`} fillOpacity={0.8 + (index % 2) * 0.2} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      )}
 
       <Card className="p-6 shadow-card">
         <div className="flex items-center justify-between mb-4">

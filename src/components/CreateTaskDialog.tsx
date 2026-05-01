@@ -19,6 +19,7 @@ const taskSchema = z.object({
   description: z.string().trim().max(1000).optional(),
   deadline: z.string().optional(),
   assigned_to: z.string().optional(),
+  priority: z.enum(['low', 'medium', 'high']),
 });
 
 interface Props {
@@ -66,14 +67,17 @@ export default function CreateTaskDialog({ defaultProjectId, trigger, lockProjec
       description: fd.get("description") || undefined,
       deadline: fd.get("deadline") || undefined,
       assigned_to: fd.get("assigned_to") || undefined,
+      priority: fd.get("priority") || "medium",
     });
     if (!parsed.success) { toast.error(parsed.error.errors[0].message); return; }
     createTask.mutate({
-      project_id: parsed.data.project_id,
+      projectId: parsed.data.project_id,
       title: parsed.data.title,
       description: parsed.data.description,
       deadline: parsed.data.deadline ? new Date(parsed.data.deadline).toISOString() : null,
-      assigned_to: parsed.data.assigned_to || null,
+      assignedTo: parsed.data.assigned_to || null,
+      // @ts-ignore - added priority to api
+      priority: parsed.data.priority,
     });
   };
 
@@ -107,9 +111,22 @@ export default function CreateTaskDialog({ defaultProjectId, trigger, lockProjec
             </select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
-            <Input id="title" name="title" required placeholder="e.g. Ship onboarding revamp" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2 col-span-1">
+              <Label htmlFor="title">Title</Label>
+              <Input id="title" name="title" required placeholder="Task title" />
+            </div>
+            <div className="space-y-2 col-span-1">
+              <Label htmlFor="priority">Priority</Label>
+              <select
+                name="priority" id="priority" defaultValue="medium"
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -131,8 +148,8 @@ export default function CreateTaskDialog({ defaultProjectId, trigger, lockProjec
               >
                 <option value="">Unassigned</option>
                 {members.map((m: any) => (
-                  <option key={m.user_id} value={m.user_id}>
-                    {m.profiles?.full_name || m.profiles?.email}
+                  <option key={m.id} value={m.id}>
+                    {m.full_name || m.email}
                   </option>
                 ))}
               </select>

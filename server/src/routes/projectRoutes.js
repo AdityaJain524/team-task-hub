@@ -8,7 +8,7 @@ router.use(authenticate);
 router.get('/',    ctrl.list);
 router.get('/:id', ctrl.get);
 
-router.post('/',         requireRole('admin'), validate(ctrl.schemas.projectSchema), ctrl.create);
+router.post('/',         validate(ctrl.schemas.projectSchema), ctrl.create);
 router.put('/:id',       requireRole('admin'), validate(ctrl.schemas.projectSchema), ctrl.update);
 router.delete('/:id',    requireRole('admin'), ctrl.remove);
 

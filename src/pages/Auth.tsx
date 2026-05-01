@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { authApi, AppRole } from "@/lib/api";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { CheckSquare, Shield, Users } from "lucide-react";
 
@@ -72,17 +71,15 @@ export default function Auth() {
       const { user } = await authApi.login(parsed.data.email, parsed.data.password);
       if (!user) throw new Error("Login failed");
 
-      // Enforce portal/role match
-      const role = await authApi.getRole(user.id);
-      if (role !== portalMeta.role) {
-        await supabase.auth.signOut();
+      if (user.role !== portalMeta.role) {
+        authApi.logout();
         toast.error(
-          `This account is registered as ${role ?? "unknown"}. Please use the ${role === "admin" ? "Admin" : "Team Member"} portal.`
+          `This account is registered as ${user.role}. Please use the ${user.role === "admin" ? "Admin" : "Team Member"} portal.`
         );
         return;
       }
       toast.success(`Welcome back, ${portalMeta.label}`);
-      navigate("/");
+      window.location.href = "/";
     } catch (err: any) {
       toast.error(err.message ?? "Login failed");
     } finally { setLoading(false); }
@@ -130,13 +127,15 @@ export default function Auth() {
             </p>
           </div>
 
-          <Tabs defaultValue="login">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="login">Login</TabsTrigger>
-              <TabsTrigger value="signup">Sign up</TabsTrigger>
-            </TabsList>
+          <Tabs defaultValue="login" className="w-full">
+            {portal === "member" && (
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="login">Login</TabsTrigger>
+                <TabsTrigger value="signup">Sign up</TabsTrigger>
+              </TabsList>
+            )}
 
-            <TabsContent value="login">
+            <TabsContent value="login" className="mt-0">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="login-email">Email</Label>
@@ -157,28 +156,30 @@ export default function Auth() {
               </form>
             </TabsContent>
 
-            <TabsContent value="signup">
-              <form onSubmit={handleSignup} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="su-name">Full name</Label>
-                  <Input id="su-name" name="fullName" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="su-email">Email</Label>
-                  <Input id="su-email" name="email" type="email" required autoComplete="email" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="su-password">Password</Label>
-                  <Input id="su-password" name="password" type="password" required minLength={8} autoComplete="new-password" />
-                </div>
-                <Button type="submit" disabled={loading} className="w-full">
-                  {loading ? "Creating..." : "Create account"}
-                </Button>
-                <p className="text-xs text-muted-foreground text-center">
-                  New accounts are created as <strong>Team Members</strong>. The first ever account becomes the Admin. Additional admins can be granted by an existing Admin.
-                </p>
-              </form>
-            </TabsContent>
+            {portal === "member" && (
+              <TabsContent value="signup">
+                <form onSubmit={handleSignup} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="su-name">Full name</Label>
+                    <Input id="su-name" name="fullName" required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="su-email">Email</Label>
+                    <Input id="su-email" name="email" type="email" required autoComplete="email" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="su-password">Password</Label>
+                    <Input id="su-password" name="password" type="password" required minLength={8} autoComplete="new-password" />
+                  </div>
+                  <Button type="submit" disabled={loading} className="w-full">
+                    {loading ? "Creating..." : "Create account"}
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    New accounts are created as <strong>Team Members</strong>. Administrator privileges can only be granted by an existing Admin.
+                  </p>
+                </form>
+              </TabsContent>
+            )}
           </Tabs>
         </Card>
       </div>

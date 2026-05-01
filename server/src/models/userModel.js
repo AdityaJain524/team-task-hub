@@ -34,3 +34,11 @@ exports.listAll = async () => {
   );
   return rows;
 };
+
+exports.updateRole = async (id, role) => {
+  const { rows } = await pool.query(
+    'UPDATE users SET role = $1 WHERE id = $2 RETURNING id, email, full_name, role',
+    [role, id]
+  );
+  return rows[0] || null;
+};

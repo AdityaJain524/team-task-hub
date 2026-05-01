@@ -1,10 +1,10 @@
 const pool = require('../db/pool');
 
-exports.create = async ({ projectId, title, description, deadline, assignedTo, createdBy }) => {
+exports.create = async ({ projectId, title, description, deadline, assignedTo, priority, createdBy }) => {
   const { rows } = await pool.query(
-    `INSERT INTO tasks (project_id, title, description, deadline, assigned_to, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [projectId, title, description, deadline, assignedTo, createdBy]
+    `INSERT INTO tasks (project_id, title, description, deadline, assigned_to, priority, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [projectId, title, description, deadline, assignedTo, priority || 'medium', createdBy]
   );
   return rows[0];
 };
@@ -49,13 +49,13 @@ exports.listAll = async () => {
   return rows;
 };
 
-exports.update = async (id, { title, description, deadline, assignedTo, status }) => {
+exports.update = async (id, { title, description, deadline, assignedTo, status, priority }) => {
   const { rows } = await pool.query(
     `UPDATE tasks
      SET title = $1, description = $2, deadline = $3, assigned_to = $4,
-         status = $5, updated_at = now()
-     WHERE id = $6 RETURNING *`,
-    [title, description, deadline, assignedTo, status, id]
+         status = $5, priority = $6, updated_at = now()
+     WHERE id = $7 RETURNING *`,
+    [title, description, deadline, assignedTo, status, priority, id]
   );
   return rows[0] || null;
 };
@@ -83,15 +83,28 @@ exports.dashboardStats = async ({ userId, isAdmin }) => {
   const { rows } = await pool.query(
     `SELECT
        COUNT(*)::int AS total,
-       COUNT(*) FILTER (WHERE status = 'pending')::int      AS pending,
+       COUNT(*) FILTER (WHERE status = 'todo')::int         AS todo,
        COUNT(*) FILTER (WHERE status = 'in_progress')::int  AS in_progress,
-       COUNT(*) FILTER (WHERE status = 'completed')::int    AS completed,
+       COUNT(*) FILTER (WHERE status = 'done')::int         AS done,
        COUNT(*) FILTER (WHERE deadline IS NOT NULL
                         AND deadline < now()
-                        AND status <> 'completed')::int     AS overdue
+                        AND status <> 'done')::int          AS overdue
      FROM tasks t
      ${where}`,
     params
   );
-  return rows[0];
+  const stats = rows[0];
+
+  if (isAdmin) {
+    const { rows: userStats } = await pool.query(
+      `SELECT u.full_name, COUNT(t.id)::int as count
+       FROM users u
+       LEFT JOIN tasks t ON t.assigned_to = u.id
+       GROUP BY u.id, u.full_name
+       ORDER BY count DESC`
+    );
+    stats.tasksPerUser = userStats;
+  }
+
+  return stats;
 };

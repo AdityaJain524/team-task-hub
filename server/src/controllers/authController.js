@@ -26,8 +26,8 @@ exports.signup = async (req, res) => {
   const existing = await userModel.findByEmail(email);
   if (existing) return res.status(409).json({ error: 'Email already registered' });
 
-  const count = await userModel.countAll();
-  const role = count === 0 ? 'admin' : 'member';
+  // Signup is strictly for members. Admins must be promoted by existing admins.
+  const role = 'member';
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await userModel.create({ email, passwordHash, fullName, role });
