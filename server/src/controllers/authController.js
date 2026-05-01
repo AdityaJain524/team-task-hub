@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const { z } = require('zod');
 const userModel = require('../models/userModel');
+const { signToken, verifyToken } = require('../middleware/auth');
 
 const signupSchema = z.object({
   email: z.string().email(),
@@ -14,15 +14,11 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-function signToken(user) {
-  return jwt.sign(
-    { sub: user.id, role: user.role, email: user.email },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-  );
-}
+const verifySchema = z.object({
+  token: z.string().min(10),
+});
 
-exports.schemas = { signupSchema, loginSchema };
+exports.schemas = { signupSchema, loginSchema, verifySchema };
 
 exports.signup = async (req, res) => {
   const { email, password, fullName } = req.body;
